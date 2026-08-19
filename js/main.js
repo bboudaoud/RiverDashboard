@@ -1,15 +1,37 @@
 "use strict";
 
 // Generic river dashboard entry point.
-// Point startDashboard at your river config JSON, and optionally pass a
-// customGetter for non-USGS sources (lakes, dam projections, etc.).
+// Host pages can set data-config on the script tag (defaults to ./river.json),
+// or import { boot } and call it with a config path / customGetter.
 
 import { startDashboard } from "./river.js";
 
-try {
-    await startDashboard("./river.json");
+function ensureStyles() {
+    const href = new URL("../style.css", import.meta.url).href;
+    if ([...document.querySelectorAll("link[rel=stylesheet]")].some(link => link.href === href)) {
+        return;
+    }
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
 }
-catch (error) {
-    console.error(error);
-    document.body.textContent = `Failed to start dashboard: ${error.message}`;
+
+export async function boot(configFile = "./river.json", customGetter, root = document.body) {
+    ensureStyles();
+    try {
+        await startDashboard(configFile, customGetter, root);
+    }
+    catch (error) {
+        console.error(error);
+        root.textContent = `Failed to start dashboard: ${error.message}`;
+    }
+}
+
+const entryScript = [...document.querySelectorAll("script[type=module]")].find(
+    script => script.src === import.meta.url
+);
+
+if (entryScript) {
+    await boot(entryScript.dataset.config || "./river.json");
 }
