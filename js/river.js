@@ -28,6 +28,7 @@ let FLOW_COLORS;
 let LAKE_COLORS;
 let TEMP_COLORS;
 let DEFAULT_TEMP_THRESH;
+let MAX_AGE_MS;
 
 let listElement;
 let allSites;
@@ -61,6 +62,9 @@ export async function startDashboard(configFile, customGetter, root = document.b
     LAKE_COLORS = defaults.lakeColors || DEFAULT_LAKE_COLORS;
     TEMP_COLORS = defaults.tempColors || DEFAULT_TEMP_COLORS;
     DEFAULT_TEMP_THRESH = defaults.tempThresholds;
+    // Drop USGS readings older than this (hours). Set 0 to keep any age.
+    const maxAgeHours = defaults.maxAgeHours != undefined ? defaults.maxAgeHours : 6;
+    MAX_AGE_MS = maxAgeHours > 0 ? maxAgeHours * 3600 * 1000 : undefined;
     getCustomData = customGetter;
 
     // Collect the sites and render the structure
@@ -319,8 +323,15 @@ function latestValue(values, decimals, convert = value => value) {
     if (values.length === 0) {
         return undefined;
     }
+    const latest = values[values.length - 1];
+    if (MAX_AGE_MS != undefined && latest.dateTime != undefined) {
+        const ageMs = Date.now() - new Date(latest.dateTime).getTime();
+        if (ageMs > MAX_AGE_MS) {
+            return undefined;
+        }
+    }
     const factor = 10 ** decimals;
-    const value = convert(Number(values[values.length - 1].value));
+    const value = convert(Number(latest.value));
     return Math.round(value * factor) / factor;
 }
 
