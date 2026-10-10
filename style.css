@@ -241,7 +241,7 @@ a:active {
     border-radius: 0 0 20px 20px;
     border: 3px solid #1565c0;
     border-top: none;
-    padding: 20px 20px 6px;
+    padding: 10px 20px 6px;
     margin: 0 auto;
     max-width: 340px;
     position: relative;
@@ -262,7 +262,8 @@ a:active {
 
 .lake-fill {
     position: relative;
-    width: 100%;
+    width: calc(100% + 16px);
+    margin-left: -8px;
     height: 40px;
     background: rgba(255,255,255,0.3);
     border-radius: 4px;
@@ -283,6 +284,40 @@ a:active {
     justify-content: center;
     transition: width 0.3s ease;
     min-width: 60px;
+}
+
+.fill-label {
+    position: absolute;
+    inset: 0;
+    color: #1565c0;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pool-diff {
+    color: var(--color);
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.pool-level {
+    font-size: 0.7em;
+}
+
+.lake-readout {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 8px;
+    text-shadow: -0.75px -0.75px 0 white, 0.75px -0.75px 0 white, -0.75px 0.75px 0 white, 0.75px 0.75px 0 white;
+}
+
+.lake-container .lake-level {
+    display: block;
+    margin: 0;
+    padding: 0;
 }
 
 .lake-level {

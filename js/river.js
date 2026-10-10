@@ -138,9 +138,10 @@ function update() {
             requiredSiteIds.add(siteId);
         }
     }
+    const siteData = getDataForSites([...requiredSiteIds]);
     const latestValues = {};
     for (const siteId of requiredSiteIds) {
-        latestValues[siteId] = getLatestValues(siteId);
+        latestValues[siteId] = getLatestValues(siteData[siteId]);
     }
 
     for (const site of allSites) {
@@ -197,7 +198,9 @@ function applyLakeData(site, data) {
     const siteDiv = document.getElementById(`${name}_div`);
     const levelField = document.getElementById(`${name}_level`);
     const fillPercentage = document.getElementById(`${name}_fillPct`);
-    if (!siteDiv || !levelField || !fillPercentage) {
+    const fillLabel = document.getElementById(`${name}_fillLabel`);
+    const poolDiff = document.getElementById(`${name}_poolDiff`);
+    if (!siteDiv || !levelField || !fillPercentage || !fillLabel || !poolDiff) {
         console.warn(`Missing lake dashboard elements for ${site.name}`);
         return;
     }
@@ -212,20 +215,25 @@ function applyLakeData(site, data) {
         const drawdown = pool.full - level;
         const currentStorage = pool.fullStorageAcFt - pool.surfaceAcres * drawdown;
         const percentage = (currentStorage / pool.fullStorageAcFt) * 100;
-        fillPercentage.textContent = `${Math.max(0, percentage).toFixed(0)}%`;
+        fillLabel.textContent = `${Math.max(0, percentage).toFixed(0)}%`;
         fillPercentage.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
 
         const diff = level - pool.full;
-        const diffText = diff.toFixed(2);
+        const diffText = parseFloat(diff.toFixed(2));
         if (diff > 0) {
-            levelField.textContent += ` (+${diffText} ft)`;
+            poolDiff.textContent = `+${diffText} ft`;
         }
         else if (diff < 0) {
-            levelField.textContent += ` (${diffText} ft)`;
+            poolDiff.textContent = `${diffText} ft`;
         }
         else {
-            levelField.textContent += " (@ full pool)";
+            poolDiff.textContent = "Full pool";
         }
+
+        const levelSpan = document.createElement("span");
+        levelSpan.className = "pool-level";
+        levelSpan.textContent = `@ ${level} ft`;
+        levelField.replaceChildren(levelSpan);
     }
 
     const color = colorFromThresholds(level, pool, LAKE_COLORS) || "gray";
@@ -291,11 +299,7 @@ function gaugeUrl(state, siteId, periodDays = 7) {
     return `https://bboudaoud.github.io/USGS-StreamView/gaugeSite.html?state=${state}&site_id=${siteId}&periodDays=${periodDays}`;
 }
 
-function getTimeSeries(data, varName) {
-    const timeSeries = data?.value?.timeSeries;
-    if (!Array.isArray(timeSeries)) {
-        return [];
-    }
+function getTimeSeries(timeSeries, varName) {
     for (const series of timeSeries) {
         if (series?.variable?.variableName?.includes(varName)) {
             return series.values?.[0]?.value || [];
@@ -304,19 +308,36 @@ function getTimeSeries(data, varName) {
     return [];
 }
 
-function getDataForSite(siteId) {
-    const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${siteId}&parameterCd=00060,00065,00010`;
-    return fetch(url).then(response => response.json())
-        .then(data => {
-            const flowValues = getTimeSeries(data, "Streamflow");
-            const heightValues = getTimeSeries(data, "Gage height");
-            const tempValues = getTimeSeries(data, "Temperature, water");
-            return [flowValues, heightValues, tempValues];
-        })
-        .catch(error => {
-            console.error("Error fetching data:", error);
-            return [[], [], []];
-        });
+function getDataForSites(siteIds) {
+    // USGS allows at most 100 sites per request
+    const dataBySite = {};
+    for (let i = 0; i < siteIds.length; i += 100) {
+        const batch = siteIds.slice(i, i + 100);
+        const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${batch.join(",")}&parameterCd=00060,00065,00010`;
+        const request = fetch(url).then(response => response.json())
+            .then(data => {
+                const seriesBySite = {};
+                for (const series of data?.value?.timeSeries || []) {
+                    const siteId = series?.sourceInfo?.siteCode?.[0]?.value;
+                    (seriesBySite[siteId] ||= []).push(series);
+                }
+                return seriesBySite;
+            })
+            .catch(error => {
+                console.error("Error fetching data:", error);
+                return {};
+            });
+        for (const siteId of batch) {
+            dataBySite[siteId] = request.then(seriesBySite => {
+                const timeSeries = seriesBySite[siteId] || [];
+                const flowValues = getTimeSeries(timeSeries, "Streamflow");
+                const heightValues = getTimeSeries(timeSeries, "Gage height");
+                const tempValues = getTimeSeries(timeSeries, "Temperature, water");
+                return [flowValues, heightValues, tempValues];
+            });
+        }
+    }
+    return dataBySite;
 }
 
 function latestValue(values, decimals, convert = value => value) {
@@ -335,8 +356,8 @@ function latestValue(values, decimals, convert = value => value) {
     return Math.round(value * factor) / factor;
 }
 
-function getLatestValues(siteId) {
-    return getDataForSite(siteId).then(data => {
+function getLatestValues(siteData) {
+    return siteData.then(data => {
         const [flowValues, heightValues, tempValues] = data;
         const flow = latestValue(flowValues, 1);
         const height = latestValue(heightValues, 2);
@@ -381,9 +402,13 @@ function createSiteElement(site, options = {}) {
     if (site.type === "lake") {
         siteDiv.innerHTML = `${labelHtml}
         <div class="lake-fill">
-            <div class="fill-percentage" id="${name}_fillPct">--%</div>
+            <div class="fill-percentage" id="${name}_fillPct"></div>
+            <div class="fill-label" id="${name}_fillLabel">--%</div>
         </div>
-        <p class="siteData lake-level" id="${name}_level">-- ft</p>`;
+        <div class="lake-readout">
+            <div class="pool-diff" id="${name}_poolDiff"></div>
+            <p class="siteData lake-level" id="${name}_level">-- ft</p>
+        </div>`;
     }
     else {
         const showHeight = site.showHeight !== false;
