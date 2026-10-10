@@ -209,11 +209,11 @@ function applyLakeData(site, data) {
     const pool = site.pool;
     levelField.textContent = `${level} ft`;
 
-    if (pool?.full != undefined && pool.fullStorageAcFt != undefined && pool.surfaceAcres != undefined) {
+    if (pool?.full != undefined && pool.fullStorageAcFt != undefined && (data.storageAcFt != undefined || pool.surfaceAcres != undefined)) {
         // % of full pool ~= conservation storage / full-pool storage
         // (constant surface-area approx using published volume and area)
         const drawdown = pool.full - level;
-        const currentStorage = pool.fullStorageAcFt - pool.surfaceAcres * drawdown;
+        const currentStorage = data.storageAcFt ?? pool.fullStorageAcFt - pool.surfaceAcres * drawdown;
         const percentage = (currentStorage / pool.fullStorageAcFt) * 100;
         fillLabel.textContent = `${Math.max(0, percentage).toFixed(0)}%`;
         fillPercentage.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
