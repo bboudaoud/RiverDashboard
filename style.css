@@ -487,6 +487,10 @@ a:active {
         padding-right: 0;
     }
 
+    .siteExtra {
+        flex-basis: 100%;
+    }
+
     .branch .siteStats {
         gap: 2px 6px;
     }
